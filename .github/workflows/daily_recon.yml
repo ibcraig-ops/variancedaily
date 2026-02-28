@@ -1,0 +1,31 @@
+name: Daily ZAR Recon Automation
+on:
+  schedule:
+    - cron: '0 6 * * *' # Runs at 8:00 AM UTC (10:00 AM SAST) daily
+  workflow_dispatch: # Allows manual trigger for testing
+
+jobs:
+  recon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas openpyxl mysql-connector-python
+
+      - name: Run Recon Bot
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+        run: python recon_bot.py
