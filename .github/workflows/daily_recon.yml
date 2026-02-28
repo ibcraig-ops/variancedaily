@@ -1,26 +1,27 @@
 name: Daily ZAR Recon Automation
+
 on:
   schedule:
-    - cron: '0 6 * * *' # Runs at 8:00 AM UTC (10:00 AM SAST) daily
-  workflow_dispatch: # Allows manual trigger for testing
+    - cron: '0 6 * * *' # Runs at 6:00 AM UTC daily
+  workflow_dispatch: # Allows manual trigger from the Actions tab
 
 jobs:
   recon:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
       - name: Install Dependencies
         run: |
-         pip install pandas openpyxl xlrd requests
-        
-        - name: Run Recon Bot
+          pip install pandas openpyxl xlrd requests
+
+      - name: Run Recon Bot
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
@@ -31,5 +32,5 @@ jobs:
           git config --global user.name "Recon Bot"
           git config --global user.email "bot@github.com"
           git add history_data.json
-          git commit -m "Automated Recon Update: $(date)"
+          git commit -m "Automated Recon Update: $(date)" || echo "No changes to commit"
           git push
