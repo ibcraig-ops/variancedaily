@@ -20,23 +20,30 @@ def get_attachments():
     
     # Search for unread emails
     status, messages = mail.search(None, '(UNSEEN)')
-    ipai_bytes, pes_bytes, tran_date = None, None, "Unknown"
+    ipai_bytes, pes_bytes = None, None
 
-    for num in messages[0].split()[::-1]:
+    # Get newest messages first
+    message_ids = messages[0].split()
+    for num in reversed(message_ids):
         res, msg_data = mail.fetch(num, "(RFC822)")
         for response_part in msg_data:
             if isinstance(response_part, tuple):
                 msg = email.message_from_bytes(response_part[1])
                 for part in msg.walk():
-                    if part.get_content_maintype() == 'multipart' or part.get('Content-Disposition') is None: continue
+                    if part.get_content_maintype() == 'multipart' or part.get('Content-Disposition') is None:
+                        continue
                     filename = part.get_filename()
-                    if not filename: continue
+                    if not filename:
+                        continue
                     
                     if filename.endswith('.gz'):
                         ipai_bytes = gzip.decompress(part.get_payload(decode=True))
-                    if filename.endswith('.xls') or filename.endswith('.xlsx'):
+                    elif filename.endswith('.xls') or filename.endswith('.xlsx'):
                         pes_bytes = part.get_payload(decode=True)
-        if ipai_bytes and pes_bytes: break
+        
+        if ipai_bytes and pes_bytes:
+            break
+            
     return ipai_bytes, pes_bytes
 
 def send_email_report(summary_stats, variances, tran_date):
@@ -45,10 +52,9 @@ def send_email_report(summary_stats, variances, tran_date):
     
     msg = MIMEMultipart()
     msg['From'] = sender
-    msg['To'] = sender # Sending it to yourself
+    msg['To'] = sender # By default, sends to you. Change if needed.
     msg['Subject'] = f"📊 Recon Alert: R {summary_stats['var']:.2f} Variance for {tran_date}"
 
-    # Email Body
     body = f"""
     Daily Reconciliation Summary
     ----------------------------
@@ -58,11 +64,10 @@ def send_email_report(summary_stats, variances, tran_date):
     Net Diff:   R {summary_stats['var']:.2f}
     
     Attached is the breakdown of individual meter discrepancies.
-    View the full history at your InfinityFree URL.
+    View the full history at your website dashboard.
     """
     msg.attach(MIMEText(body, 'plain'))
 
-    # Create CSV Attachment
     if variances:
         df_var = pd.DataFrame(variances)
         df_var.columns = ['Meter Number', 'IPAI Amount', 'PES Amount', 'Variance']
@@ -75,29 +80,43 @@ def send_email_report(summary_stats, variances, tran_date):
         part.add_header('Content-Disposition', f'attachment; filename="Variance_Report_{tran_date}.csv"')
         msg.attach(part)
 
-    # Send
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(sender, password)
-        server.send_message(msg)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender, password)
+            server.send_message(msg)
+    except Exception as e:
+        print(f"Failed to send email: {e}")
 
 def run_recon():
     ipai_raw, pes_raw = get_attachments()
-    if not ipai_raw or not pes_raw: return print("Files not found.")
+    if not ipai_raw or not pes_raw:
+        print("Required files (.gz and .xls) not found in recent unread emails.")
+        return
 
-    # Process IPAI
+    # Process IPAI - Robust parsing to avoid the "saw 19 fields" error
     df_ipai = pd.read_csv(
-    io.BytesIO(ipai_raw), 
-    header=None, 
-    names=range(25),     # Tells Python to expect up to 25 columns
-    fill_value=None, 
-    index_col=False, 
-    on_bad_lines='skip'  # Skips lines that don't match rather than crashing
+        io.BytesIO(ipai_raw), 
+        header=None, 
+        names=range(30), # Pre-allocate columns
+        on_bad_lines='skip',
+        engine='python'
+    )
+    
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
-    tran_date = str(df_ipai.iloc[0, 8]).split('.')[0]
+    if df_ipai.empty:
+        print("No 'IPAI' identifier rows found in the CSV.")
+        return
+
+    # Extract transaction date from the 9th column (index 8)
+    raw_date = str(df_ipai.iloc[0, 8]).split('.')[0]
+    tran_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}" if len(raw_date) >= 8 else "Unknown"
+    
+    # Meter is index 14, Amount (Cents) is index 13
     ipai_summary = df_ipai.groupby(14)[13].sum() / 100
 
     # Process PES
     df_pes = pd.read_excel(io.BytesIO(pes_raw))
+    # Assuming Meter is Column 1 (index 0) and Amount is Column 3 (index 2)
     pes_summary = df_pes.groupby(df_pes.columns[0])[df_pes.columns[2]].sum()
 
     # Compare
@@ -108,33 +127,36 @@ def run_recon():
     for m in all_meters:
         v1, v2 = ipai_summary.get(m, 0), pes_summary.get(m, 0)
         if abs(v1 - v2) > 0.01:
-            variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2})
+            variances.append({'m': str(m), 'v1': float(v1), 'v2': float(v2), 'diff': float(v1 - v2)})
 
     # Save to Database
     conn = mysql.connector.connect(**DB_CONFIG)
     cursor = conn.cursor()
+    
+    # Update Run Summary
     cursor.execute("INSERT INTO recon_runs (run_time, tran_date, ipai_total, pes_total, variance) VALUES (%s, %s, %s, %s, %s)",
-                   (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), tran_date, t1, t2, t1-t2))
+                   (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), tran_date, float(t1), float(t2), float(t1-t2)))
     run_id = cursor.lastrowid
+    
+    # Update Line Items
     for item in variances:
         cursor.execute("INSERT INTO recon_details (run_id, meter_number, ipai_amount, pes_amount, line_variance) VALUES (%s, %s, %s, %s, %s)",
                        (run_id, item['m'], item['v1'], item['v2'], item['diff']))
+    
+    # Update Automation Status for the Web App
+    cursor.execute("""
+        UPDATE automation_status 
+        SET last_run_time = %s, status = 'Success', recipient = %s 
+        WHERE id = 1
+    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), os.getenv('EMAIL_USER')))
+    
     conn.commit()
     conn.close()
 
     # Email Notification
-    stats = {'ipai': t1, 'pes': t2, 'var': t1-t2}
+    stats = {'ipai': float(t1), 'pes': float(t2), 'var': float(t1-t2)}
     send_email_report(stats, variances, tran_date)
-    print("Process Complete.")
+    print("Process Complete. Database updated and email sent.")
 
 if __name__ == "__main__":
     run_recon()
-
-# Add this inside the run_recon() function after the email is sent:
-cursor = conn.cursor()
-cursor.execute("""
-    UPDATE automation_status 
-    SET last_run_time = %s, status = 'Success', recipient = %s 
-    WHERE id = 1
-""", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), os.getenv('EMAIL_USER')))
-conn.commit()
