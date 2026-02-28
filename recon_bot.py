@@ -123,3 +123,12 @@ def run_recon():
 
 if __name__ == "__main__":
     run_recon()
+
+# Add this inside the run_recon() function after the email is sent:
+cursor = conn.cursor()
+cursor.execute("""
+    UPDATE automation_status 
+    SET last_run_time = %s, status = 'Success', recipient = %s 
+    WHERE id = 1
+""", (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), os.getenv('EMAIL_USER')))
+conn.commit()
