@@ -20,12 +20,16 @@ jobs:
         run: |
          pip install pandas openpyxl xlrd requests
         
-      - name: Run Recon Bot
+        - name: Run Recon Bot
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASS: ${{ secrets.DB_PASS }}
-          DB_NAME: ${{ secrets.DB_NAME }}
         run: python recon_bot.py
+
+      - name: Commit and Push History
+        run: |
+          git config --global user.name "Recon Bot"
+          git config --global user.email "bot@github.com"
+          git add history_data.json
+          git commit -m "Automated Recon Update: $(date)"
+          git push
