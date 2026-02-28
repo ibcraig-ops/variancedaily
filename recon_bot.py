@@ -129,9 +129,27 @@ def run_recon():
         if abs(v1 - v2) > 0.01:
             variances.append({'m': str(m), 'v1': float(v1), 'v2': float(v2), 'diff': float(v1 - v2)})
 
-    # Save to Database
-    conn = mysql.connector.connect(**DB_CONFIG)
-    cursor = conn.cursor()
+    # Save to Database via the PHP Bridge
+    payload = {
+        "runTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tranDate": tran_date,
+        "ipai": float(t1),
+        "pes": float(t2),
+        "var": float(t1-t2),
+        "items": variances
+    }
+    
+    # Update this URL to your actual InfinityFree website URL
+    bridge_url = "https://ourdailyvariances.free.nf/history.php"
+    
+    import requests
+    response = requests.post(bridge_url, json=payload)
+    
+    if response.status_code == 200:
+        print("Successfully updated database via PHP Bridge.")
+    else:
+        print(f"Failed to update database. Status: {response.status_code}")
+    
     
     # Update Run Summary
     cursor.execute("INSERT INTO recon_runs (run_time, tran_date, ipai_total, pes_total, variance) VALUES (%s, %s, %s, %s, %s)",
