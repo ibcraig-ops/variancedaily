@@ -2,7 +2,7 @@ name: Daily ZAR Recon Automation
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Runs at 6:00 AM UTC daily
+    - cron: '30 10 * * *' # Runs at 10:30 AM UTC daily
   workflow_dispatch: # Allows manual trigger from the Actions tab
 
 jobs:
