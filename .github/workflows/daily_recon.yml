@@ -18,7 +18,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install pandas openpyxl xlrd mysql-connector-python
+         pip install pandas openpyxl xlrd requests
        
       - name: Run Recon Bot
         env:
