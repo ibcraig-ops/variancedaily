@@ -78,37 +78,25 @@ def run_recon():
         if abs(v1 - v2) > 0.01:
             variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2})
 
-    # --- SAVE VIA BRIDGE ---
-    payload = {
-        "runTime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "tranDate": tran_date,
-        "ipai": t1,
-        "pes": t2,
-        "var": t1-t2,
+    # --- SAVE TO GITHUB JSON (Plan B) ---
+    new_run = {
+        "run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "tran_date": tran_date,
+        "ipai_total": t1,
+        "pes_total": t2,
+        "variance": t1-t2,
         "items": variances
     }
     
-    bridge_url = "https://ourdailyvariances.free.nf/history.php"
+    import json
+    # Save the file locally so GitHub Actions can "commit" it
+    with open('history_data.json', 'w') as f:
+        json.dump(new_run, f)
     
-    # Mimic a real Chrome browser
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*',
-        'Content-Type': 'application/json'
-    }
-    
-    try:
-        session = requests.Session()
-        # First, a "GET" to grab any security cookies
-        session.get(bridge_url, headers=headers)
-        
-        # Now, the "POST" with the data
-        response = session.post(bridge_url, json=payload, headers=headers, timeout=30)
-        print(f"Bridge Response: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"Bridge failed: {e}")
-    
-    
+    print("Local JSON file created for GitHub upload.")
+    send_email_report({'ipai': t1, 'pes': t2, 'var': t1-t2}, variances, tran_date)
+
+   
 
     send_email_report({'ipai': t1, 'pes': t2, 'var': t1-t2}, variances, tran_date)
 
