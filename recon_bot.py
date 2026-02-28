@@ -88,14 +88,27 @@ def run_recon():
         "items": variances
     }
     
-    # UPDATE THIS URL
     bridge_url = "https://ourdailyvariances.free.nf/history.php"
     
+    # Mimic a real Chrome browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json'
+    }
+    
     try:
-        response = requests.post(bridge_url, json=payload)
+        session = requests.Session()
+        # First, a "GET" to grab any security cookies
+        session.get(bridge_url, headers=headers)
+        
+        # Now, the "POST" with the data
+        response = session.post(bridge_url, json=payload, headers=headers, timeout=30)
         print(f"Bridge Response: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Bridge failed: {e}")
+    
+    
 
     send_email_report({'ipai': t1, 'pes': t2, 'var': t1-t2}, variances, tran_date)
 
