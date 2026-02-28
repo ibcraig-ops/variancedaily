@@ -85,7 +85,13 @@ def run_recon():
     if not ipai_raw or not pes_raw: return print("Files not found.")
 
     # Process IPAI
-    df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None)
+    df_ipai = pd.read_csv(
+    io.BytesIO(ipai_raw), 
+    header=None, 
+    names=range(25),     # Tells Python to expect up to 25 columns
+    fill_value=None, 
+    index_col=False, 
+    on_bad_lines='skip'  # Skips lines that don't match rather than crashing
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
     tran_date = str(df_ipai.iloc[0, 8]).split('.')[0]
     ipai_summary = df_ipai.groupby(14)[13].sum() / 100
