@@ -23,8 +23,7 @@ def get_attachments():
                 if isinstance(response_part, tuple):
                     msg = email.message_from_bytes(response_part[1])
                     for part in msg.walk():
-                        if part.get_content_maintype() == 'multipart' or part.get('Content-Disposition') is None: 
-                            continue
+                        if part.get_content_maintype() == 'multipart' or part.get('Content-Disposition') is None: continue
                         filename = part.get_filename()
                         if not filename: continue
                         fn = filename.lower()
@@ -44,20 +43,25 @@ def run_recon():
         print("Required files not found. Stopping.")
         return
 
-    # 1. PROCESS IPAI
+    # 1. PROCESS IPAI (11-digit Meter standard)
     df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None, names=range(35), on_bad_lines='skip', engine='python')
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
     raw_date = str(df_ipai.iloc[0, 8]).split('.')[0]
     tran_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
-    df_ipai[14] = df_ipai[14].astype(str).str.split('.').str[0]
+    
+    # Clean Meter: Force to string, remove .0, keep first 11 digits
+    df_ipai[14] = df_ipai[14].astype(str).str.split('.').str[0].str.slice(0, 11)
     ipai_summary = df_ipai.groupby(14)[13].sum() / 100
 
-    # 2. PROCESS PES (Smart Logic)
+    # 2. PROCESS PES (Normalize to 11-digits)
     df_pes = pd.read_excel(io.BytesIO(pes_raw))
     mtr_col = next((c for c in df_pes.columns if 'meter' in str(c).lower()), df_pes.columns[0])
     amt_col = next((c for c in df_pes.columns if 'amount' in str(c).lower() or 'total' in str(c).lower()), df_pes.columns[2])
+    
+    # Clean Amount and Meter: Remove trailing zeros/digits to match IPAI 11-digit format
     df_pes[amt_col] = pd.to_numeric(df_pes[amt_col], errors='coerce')
-    df_pes[mtr_col] = df_pes[mtr_col].astype(str).str.split('.').str[0]
+    df_pes[mtr_col] = df_pes[mtr_col].astype(str).str.split('.').str[0].str.slice(0, 11)
+    
     df_pes = df_pes.dropna(subset=[amt_col])
     pes_summary = df_pes.groupby(mtr_col)[amt_col].sum()
 
@@ -65,6 +69,7 @@ def run_recon():
     all_meters = set(ipai_summary.index) | set(pes_summary.index)
     variances = []
     t1, t2 = float(ipai_summary.sum()), float(pes_summary.sum())
+    
     for m in all_meters:
         v1, v2 = float(ipai_summary.get(m, 0)), float(pes_summary.get(m, 0))
         if abs(v1 - v2) > 0.01:
