@@ -12,11 +12,11 @@ TRACKER_URL = "http://yourdailyvariances.free.nf/tracker.php"
 def get_attachments():
     print("Connecting to Gmail...")
     try:
+        # Scan last 15 emails to ensure we don't miss the attachments
         mail = imaplib.IMAP4_SSL("imap.gmail.com", timeout=30)
         mail.login(os.getenv('EMAIL_USER'), os.getenv('EMAIL_PASS'))
         mail.select("inbox")
         
-        # Search last 15 emails for reliability
         status, messages = mail.search(None, 'ALL')
         ipai_bytes, pes_bytes = None, None
         message_ids = messages[0].split()
@@ -49,13 +49,12 @@ def get_attachments():
 def run_recon():
     ipai_raw, pes_raw = get_attachments()
     if not ipai_raw or not pes_raw:
-        print("Required files not found in recent emails. Stopping.")
+        print("Required files not found. Stopping.")
         return
 
-    print("Files located. Starting data parsing...")
+    print("Files located. Starting Smart Data Mapping...")
 
-    # 1. PROCESS IPAI (CSV)
-    # IPAI typically has a standard 35-column format
+    # 1. PROCESS IPAI (Standard CSV)
     df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None, names=range(35), on_bad_lines='skip', engine='python')
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
     
@@ -63,50 +62,52 @@ def run_recon():
     raw_date = str(df_ipai.iloc[0, 8]).split('.')[0]
     tran_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
     
-    # Group by Meter (Index 14) and sum Amount (Index 13)
-    # Meter numbers are forced to strings and decimals stripped
+    # String Lock for IPAI Meters
     df_ipai[14] = df_ipai[14].astype(str).str.split('.').str[0]
     ipai_summary = df_ipai.groupby(14)[13].sum() / 100
 
-    # 2. PROCESS PES (Excel) - STRICT INDEXING FIX
-    # We use header=0 but then iloc to bypass naming errors like 'Vending transaction'
-    df_pes = pd.read_excel(io.BytesIO(pes_raw), header=0)
+    # 2. PROCESS PES (Smart Keyword Mapping)
+    # This prevents the 'Vending transaction' error by finding the correct columns
+    df_pes = pd.read_excel(io.BytesIO(pes_raw))
     
-    # FORCE DATA TYPES: Column 1 (Index 0) is Meter, Column 3 (Index 2) is Amount
-    # We 'coerce' errors to handle any rogue text in numeric columns
-    df_pes.iloc[:, 2] = pd.to_numeric(df_pes.iloc[:, 2], errors='coerce')
-    df_pes.iloc[:, 0] = df_pes.iloc[:, 0].astype(str).str.split('.').str[0]
+    # DYNAMIC SEARCH: Find 'Meter' and 'Amount' columns by name
+    mtr_col = next((c for c in df_pes.columns if 'meter' in str(c).lower()), df_pes.columns[0])
+    amt_col = next((c for c in df_pes.columns if 'amount' in str(c).lower() or 'total' in str(c).lower()), df_pes.columns[2])
 
-    # CLEANUP: Remove any rows that are empty in the amount column
-    df_pes = df_pes.dropna(subset=[df_pes.columns[2]])
-    
-    # Group by the first column and sum the third
-    pes_summary = df_pes.groupby(df_pes.columns[0])[df_pes.columns[2]].sum()
+    print(f"Mapping detected: Meter -> [{mtr_col}], Amount -> [{amt_col}]")
+
+    # CLEANUP: Turn descriptions into NaN and strip decimals from meters
+    df_pes[amt_col] = pd.to_numeric(df_pes[amt_col], errors='coerce')
+    df_pes[mtr_col] = df_pes[mtr_col].astype(str).str.split('.').str[0]
+
+    # REMOVE NULLS: Drop rows that aren't financial transactions
+    df_pes = df_pes.dropna(subset=[amt_col])
+    pes_summary = df_pes.groupby(mtr_col)[amt_col].sum()
 
     # 3. COMPARISON & LEDGER SYNC
     all_meters = set(ipai_summary.index) | set(pes_summary.index)
     variances = []
     t1, t2 = float(ipai_summary.sum()), float(pes_summary.sum())
 
-    print(f"Analyzing {len(all_meters)} unique meters...")
+    print(f"Comparing {len(all_meters)} unique meters...")
 
     for m in all_meters:
         v1, v2 = float(ipai_summary.get(m, 0)), float(pes_summary.get(m, 0))
         if abs(v1 - v2) > 0.01:
             variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2})
             
-            # SYNC TO DASHBOARD: Push individual meter variances to the SQL Ledger
+            # PUSH TO SQL: Update your Dashboard Outstanding Ledger
             try:
                 requests.post(TRACKER_URL, json={
                     "meter_number": str(m),
                     "amount": v1 - v2,
-                    "tran_date": tran_date,
+                    "tranDate": tran_date,
                     "isRobotSync": True
                 }, timeout=3)
             except:
                 pass
 
-    # 4. SAVE TO JSON HISTORY (GITHUB VIEW)
+    # 4. SAVE TO GITHUB JSON
     new_run = {
         "run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "tran_date": tran_date,
@@ -119,22 +120,8 @@ def run_recon():
     
     history_file = 'history_data.json'
     all_history = []
-
     if os.path.exists(history_file):
         try:
             with open(history_file, 'r') as f:
                 content = json.load(f)
-                all_history = content if isinstance(content, list) else [content]
-        except:
-            all_history = []
-
-    all_history.insert(0, new_run)
-    all_history = all_history[:31] # Retain 31 days of history
-
-    with open(history_file, 'w') as f:
-        json.dump(all_history, f, indent=4)
-
-    print(f"Recon Successful for {tran_date}. Total Variance: R {t1-t2:.2f}")
-
-if __name__ == "__main__":
-    run_recon()
+                all_history = content
