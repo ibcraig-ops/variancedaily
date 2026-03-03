@@ -8,6 +8,43 @@ from datetime import datetime
 # --- CONFIGURATION ---
 TRACKER_URL = "http://yourdailyvariances.free.nf/tracker.php" 
 
+def send_email_report(tran_date, ipai_total, pes_total, variance, variances):
+    """Sends a summary email of the recon results."""
+    print("Sending Email Notification...")
+    msg = MIMEMultipart()
+    msg['From'] = os.getenv('EMAIL_USER')
+    msg['To'] = os.getenv('EMAIL_USER') # Sends to yourself
+    msg['Subject'] = f"Recon Alert: {tran_date} (Var: R{variance:.2f})"
+
+    # Generate the variance list for the email body
+    var_list_html = "".join([f"<li>Meter {v['m']}: R{v['diff']:.2f}</li>" for v in variances[:10]])
+    if len(variances) > 10:
+        var_list_html += "<li>... and more in the dashboard</li>"
+
+    body = f"""
+    <div style="font-family: Arial, sans-serif; color: #333;">
+        <h2 style="color: #3182ce;">Recon Summary for {tran_date}</h2>
+        <p><b>IPAI (Bank) Total:</b> R{ipai_total:.2f}</p>
+        <p><b>PES (Sales) Total:</b> R{pes_total:.2f}</p>
+        <p><b>Final Variance:</b> <span style="color:{'red' if abs(variance) > 0.1 else 'green'}">R{variance:.2f}</span></p>
+        <hr>
+        <h3>Top Variances:</h3>
+        <ul>{var_list_html if variances else "<li>No variances found.</li>"}</ul>
+        <p><i>Check your <a href="http://yourdailyvariances.free.nf">Dashboard</a> for the full audit trail.</i></p>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(os.getenv('EMAIL_USER'), os.getenv('EMAIL_PASS'))
+        server.send_message(msg)
+        server.quit()
+        print("✓ Email sent successfully.")
+    except Exception as e:
+        print(f"Email failed to send: {e}")
+
 def get_attachments():
     print("Connecting to Gmail...")
     try:
@@ -15,7 +52,6 @@ def get_attachments():
         mail.login(os.getenv('EMAIL_USER'), os.getenv('EMAIL_PASS'))
         mail.select("inbox")
         
-        # INCREASED RANGE: Search last 50 emails
         status, messages = mail.search(None, 'ALL')
         ipai_bytes, pes_bytes = None, None
         message_ids = messages[0].split()
@@ -33,7 +69,7 @@ def get_attachments():
                         if not filename: continue
                         fn = filename.lower()
                         
-                        # BROAD MATCH: Look for keywords in filename
+                        # Match logic for your morning reports
                         if fn.endswith('.gz') and 'ipai' in fn:
                             print(f"✓ Found IPAI: {filename}")
                             ipai_bytes = gzip.decompress(part.get_payload(decode=True))
@@ -88,18 +124,32 @@ def run_recon():
                 requests.post(TRACKER_URL, json={"meter_number": str(m), "amount": v1 - v2, "tranDate": tran_date, "isRobotSync": True}, timeout=3)
             except: pass
 
-    # 4. SAVE HISTORY
-    new_run = {"run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "tran_date": tran_date, "ipai_total": t1, "pes_total": t2, "variance": t1 - t2, "items": variances, "source": "ROBOT"}
+    # 4. SAVE HISTORY & SEND EMAIL
+    new_run = {
+        "run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+        "tran_date": tran_date, 
+        "ipai_total": t1, 
+        "pes_total": t2, 
+        "variance": t1 - t2, 
+        "items": variances, 
+        "source": "ROBOT"
+    }
+    
     h_file = 'history_data.json'
     all_h = []
     if os.path.exists(h_file):
         try:
             with open(h_file, 'r') as f: all_h = json.load(f)
         except: all_h = []
+    
     all_h.insert(0, new_run)
     with open(h_file, 'w') as f:
         json.dump(all_h[:31], f, indent=4)
-    print(f"Recon Successful. Record saved for {tran_date}")
+        
+    # TRIGGER THE NEW EMAIL NOTIFICATION
+    send_email_report(tran_date, t1, t2, t1 - t2, variances)
+    
+    print(f"Recon Successful. Record saved and Email Sent for {tran_date}")
 
 if __name__ == "__main__":
     run_recon()
