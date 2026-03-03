@@ -9,43 +9,7 @@
         "source": "ROBOT"
     },
     {
-        "run_time": "2026-03-02 10:40:24",
-        "tran_date": "2026-03-01",
-        "ipai_total": 22348.6,
-        "pes_total": 22348.6,
-        "variance": 0.0,
-        "items": [],
-        "source": "ROBOT"
-    },
-    {
         "run_time": "2026-03-01 12:39:51",
-        "tran_date": "2026-02-28",
-        "ipai_total": 15342.32,
-        "pes_total": 15342.32,
-        "variance": 0.0,
-        "items": [],
-        "source": "ROBOT"
-    },
-    {
-        "run_time": "2026-03-01 12:35:27",
-        "tran_date": "2026-02-28",
-        "ipai_total": 15342.32,
-        "pes_total": 15342.32,
-        "variance": 0.0,
-        "items": [],
-        "source": "ROBOT"
-    },
-    {
-        "run_time": "2026-03-01 12:31:52",
-        "tran_date": "2026-02-28",
-        "ipai_total": 15342.32,
-        "pes_total": 15342.32,
-        "variance": 0.0,
-        "items": [],
-        "source": "ROBOT"
-    },
-    {
-        "run_time": "2026-03-01 07:49:56",
         "tran_date": "2026-02-28",
         "ipai_total": 15342.32,
         "pes_total": 15342.32,
