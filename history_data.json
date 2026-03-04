@@ -16,22 +16,6 @@
         "source": "ROBOT"
     },
     {
-        "run_time": "2026-03-04 06:44:29",
-        "tran_date": "2026-03-03",
-        "ipai_total": 14335.2,
-        "pes_total": 14385.2,
-        "variance": -50.0,
-        "items": [
-            {
-                "m": "14386493804",
-                "v1": 0.0,
-                "v2": 50.0,
-                "diff": -50.0
-            }
-        ],
-        "source": "ROBOT"
-    },
-    {
         "run_time": "2026-03-03 08:04:26",
         "tran_date": "2026-03-02",
         "ipai_total": 24824.3,
