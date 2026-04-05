@@ -1,5 +1,14 @@
 [
     {
+        "run_time": "2026-04-05 07:31:54",
+        "tran_date": "2026-04-04",
+        "ipai_total": 15516.400000000001,
+        "pes_total": 15516.400000000001,
+        "variance": 0.0,
+        "items": [],
+        "source": "ROBOT"
+    },
+    {
         "run_time": "2026-04-04 07:17:03",
         "tran_date": "2026-04-03",
         "ipai_total": 13903.3,
@@ -272,15 +281,6 @@
         "tran_date": "2026-03-05",
         "ipai_total": 12019.2,
         "pes_total": 12019.2,
-        "variance": 0.0,
-        "items": [],
-        "source": "ROBOT"
-    },
-    {
-        "run_time": "2026-03-05 07:59:45",
-        "tran_date": "2026-03-04",
-        "ipai_total": 14850.900000000001,
-        "pes_total": 14850.900000000001,
         "variance": 0.0,
         "items": [],
         "source": "ROBOT"
