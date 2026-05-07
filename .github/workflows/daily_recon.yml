@@ -2,8 +2,8 @@ name: Daily ZAR Recon Automation
 
 on:
   schedule:
-    - cron: '17 06 * * *' # Runs at 06:30 AM UTC daily
-  workflow_dispatch: # Allows manual trigger from the Actions tab
+    - cron: '17 06 * * *'
+  workflow_dispatch:
 
 jobs:
   recon:
@@ -36,5 +36,3 @@ jobs:
           git add history_data.json
           git commit -m "Automated Recon Update: $(date)" || echo "No changes to commit"
           git push origin main
-      
-    
