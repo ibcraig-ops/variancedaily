@@ -144,7 +144,7 @@ def run_recon():
     
     all_h.insert(0, new_run)
     with open(h_file, 'w') as f:
-        json.dump(all_h[:31], f, indent=4)
+        json.dump(all_h[:91], f, indent=4)
         
     # TRIGGER THE NEW EMAIL NOTIFICATION
     send_email_report(tran_date, t1, t2, t1 - t2, variances)
