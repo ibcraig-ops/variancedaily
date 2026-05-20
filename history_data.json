@@ -1,5 +1,14 @@
 [
     {
+        "run_time": "2026-05-20 09:53:48",
+        "tran_date": "2026-05-19",
+        "ipai_total": 9024.000000000002,
+        "pes_total": 9024.000000000002,
+        "variance": 0.0,
+        "items": [],
+        "source": "ROBOT"
+    },
+    {
         "run_time": "2026-05-19 10:06:37",
         "tran_date": "2026-05-18",
         "ipai_total": 13767.2,
