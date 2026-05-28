@@ -1,23 +1,19 @@
 import imaplib, email, gzip, pandas as pd, smtplib, io, os, json, requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 from datetime import datetime
 
 # --- CONFIGURATION ---
 TRACKER_URL = "http://yourdailyvariances.free.nf/tracker.php" 
 
 def send_email_report(tran_date, ipai_total, pes_total, variance, variances):
-    """Sends a summary email of the recon results."""
     print("Sending Email Notification...")
     msg = MIMEMultipart()
     msg['From'] = os.getenv('EMAIL_USER')
-    msg['To'] = os.getenv('EMAIL_USER') # Sends to yourself
+    msg['To'] = os.getenv('EMAIL_USER')
     msg['Subject'] = f"Recon Alert: {tran_date} (Var: R{variance:.2f})"
 
-    # Generate the variance list for the email body
-    var_list_html = "".join([f"<li>Meter {v['m']}: R{v['diff']:.2f}</li>" for v in variances[:10]])
+    var_list_html = "".join([f"<li>Meter {v['m']} ({v.get('u', 'UNKNOWN')}): R{v['diff']:.2f}</li>" for v in variances[:10]])
     if len(variances) > 10:
         var_list_html += "<li>... and more in the dashboard</li>"
 
@@ -56,7 +52,7 @@ def get_attachments():
         ipai_bytes, pes_bytes = None, None
         message_ids = messages[0].split()
         
-        print(f"Scanning the last 50 emails for IPAI and PES files...")
+        print(f"Scanning the last 50 emails for the new IPAI and PES files...")
         for num in reversed(message_ids[-50:]): 
             res, msg_data = mail.fetch(num, "(RFC822)")
             for response_part in msg_data:
@@ -69,9 +65,9 @@ def get_attachments():
                         if not filename: continue
                         fn = filename.lower()
                         
-                        # Match logic for your morning reports
-                        if fn.endswith('.gz') and 'ipai' in fn:
-                            print(f"✓ Found IPAI: {filename}")
+                        # TIGHTENED MATCH LOGIC: Must contain 'markup_per_utility'
+                        if fn.endswith('.gz') and 'ipai' in fn and 'markup_per_utility' in fn:
+                            print(f"✓ Found New IPAI Utility File: {filename}")
                             ipai_bytes = gzip.decompress(part.get_payload(decode=True))
                         elif (fn.endswith('.xls') or fn.endswith('.xlsx')) and 'pes' in fn:
                             print(f"✓ Found PES: {filename}")
@@ -87,31 +83,35 @@ def get_attachments():
 def run_recon():
     ipai_raw, pes_raw = get_attachments()
     if not ipai_raw or not pes_raw:
-        print("Required files still missing. Check if 'ipai' and 'pes' are in the filenames.")
+        print("Required files still missing. Check if 'markup_per_utility' and 'pes' are in the email files.")
         return
 
-    # 1. PROCESS IPAI (Normalized to 11-digits)
     df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None, names=range(35), on_bad_lines='skip', engine='python')
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
     raw_date = str(df_ipai.iloc[0, 8]).split('.')[0]
     tran_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
     
-    # Meter Normalization: First 11 digits
     df_ipai[14] = df_ipai[14].astype(str).str.split('.').str[0].str.slice(0, 11)
+    
+    # Extract Utility from Column T safely (Index 19)
+    df_ipai[19] = df_ipai[19].astype(str).str.strip()
+    
+    utility_totals = (df_ipai.groupby(19)[13].sum() / 100).to_dict()
+    meter_to_utility = df_ipai.set_index(14)[19].to_dict()
+    
     ipai_summary = df_ipai.groupby(14)[13].sum() / 100
 
-    # 2. PROCESS PES (Smart Column Detection)
+    # 2. PROCESS PES
     df_pes = pd.read_excel(io.BytesIO(pes_raw))
     mtr_col = next((c for c in df_pes.columns if 'meter' in str(c).lower()), df_pes.columns[0])
     amt_col = next((c for c in df_pes.columns if 'amount' in str(c).lower() or 'total' in str(c).lower()), df_pes.columns[2])
     
     df_pes[amt_col] = pd.to_numeric(df_pes[amt_col], errors='coerce')
     df_pes[mtr_col] = df_pes[mtr_col].astype(str).str.split('.').str[0].str.slice(0, 11)
-    
     df_pes = df_pes.dropna(subset=[amt_col])
     pes_summary = df_pes.groupby(mtr_col)[amt_col].sum()
 
-    # 3. COMPARISON & LEDGER SYNC
+    # 3. COMPARISON
     all_meters = set(ipai_summary.index) | set(pes_summary.index)
     variances = []
     t1, t2 = float(ipai_summary.sum()), float(pes_summary.sum())
@@ -119,18 +119,20 @@ def run_recon():
     for m in all_meters:
         v1, v2 = float(ipai_summary.get(m, 0)), float(pes_summary.get(m, 0))
         if abs(v1 - v2) > 0.01:
-            variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2})
+            u_name = meter_to_utility.get(m, "UNKNOWN")
+            variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2, 'u': u_name})
             try:
                 requests.post(TRACKER_URL, json={"meter_number": str(m), "amount": v1 - v2, "tranDate": tran_date, "isRobotSync": True}, timeout=3)
             except: pass
 
-    # 4. SAVE HISTORY & SEND EMAIL
+    # 4. SAVE HISTORIC SUMMARY (91 Days Cap)
     new_run = {
         "run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
         "tran_date": tran_date, 
         "ipai_total": t1, 
         "pes_total": t2, 
         "variance": t1 - t2, 
+        "utility_totals": utility_totals,
         "items": variances, 
         "source": "ROBOT"
     }
@@ -144,12 +146,10 @@ def run_recon():
     
     all_h.insert(0, new_run)
     with open(h_file, 'w') as f:
-        json.dump(all_h[:91], f, indent=4)
+        json.dump(all_h[:91], f, indent=4) 
         
-    # TRIGGER THE NEW EMAIL NOTIFICATION
     send_email_report(tran_date, t1, t2, t1 - t2, variances)
-    
-    print(f"Recon Successful. Record saved and Email Sent for {tran_date}")
+    print(f"Recon Successful. Record saved for {tran_date}")
 
 if __name__ == "__main__":
     run_recon()
