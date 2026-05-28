@@ -1,5 +1,18 @@
 [
     {
+        "run_time": "2026-05-28 10:33:19",
+        "tran_date": "2026-05-27",
+        "ipai_total": 16929.9,
+        "pes_total": 16929.9,
+        "variance": 0.0,
+        "utility_totals": {
+            "BillingOnline": 10.0,
+            "smartpowersa": 16919.9
+        },
+        "items": [],
+        "source": "ROBOT"
+    },
+    {
         "run_time": "2026-05-27 10:19:02",
         "tran_date": "2026-05-26",
         "ipai_total": 16148.7,
