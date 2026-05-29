@@ -1,5 +1,40 @@
 [
     {
+        "run_time": "2026-05-29 12:20:53",
+        "tran_date": "2026-05-28",
+        "ipai_total": 9417.3,
+        "pes_total": 8867.3,
+        "variance": 550.0,
+        "utility_totals": {
+            "garantia": 550.0,
+            "smartpowersa": 8867.3
+        },
+        "items": [
+            {
+                "m": "14386566872",
+                "v1": 50.0,
+                "v2": 0.0,
+                "diff": 50.0,
+                "u": "garantia"
+            },
+            {
+                "m": "14386566872",
+                "v1": 350.0,
+                "v2": 0.0,
+                "diff": 350.0,
+                "u": "garantia"
+            },
+            {
+                "m": "19190154542",
+                "v1": 150.0,
+                "v2": 0.0,
+                "diff": 150.0,
+                "u": "garantia"
+            }
+        ],
+        "source": "ROBOT"
+    },
+    {
         "run_time": "2026-05-28 10:33:19",
         "tran_date": "2026-05-27",
         "ipai_total": 16929.9,
