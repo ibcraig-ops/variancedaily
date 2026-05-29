@@ -85,7 +85,7 @@ def run_recon():
         print("Required files still missing. Check if 'markup_per_utility' and 'pes' are in the email files.")
         return
 
-    # 1. PROCESS IPAI (Collect raw tracking arrays)
+    # 1. PROCESS IPAI
     df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None, names=range(50), on_bad_lines='skip', engine='python')
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
     raw_date = str(df_ipai.iloc[0, 8]).split('.')[0]
@@ -158,8 +158,11 @@ def run_recon():
     h_file = 'history_data.json'
     all_h = []
     if os.path.exists(h_file):
-        try: with open(h_file, 'r') as f: all_h = json.load(f)
-        except: all_h = []
+        try:
+            with open(h_file, 'r') as f:
+                all_h = json.load(f)
+        except:
+            all_h = []
     
     all_h.insert(0, new_run)
     with open(h_file, 'w') as f:
