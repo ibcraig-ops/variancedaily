@@ -65,7 +65,6 @@ def get_attachments():
                         if not filename: continue
                         fn = filename.lower()
                         
-                        # TIGHTENED MATCH LOGIC: Must contain 'markup_per_utility'
                         if fn.endswith('.gz') and 'ipai' in fn and 'markup_per_utility' in fn:
                             print(f"✓ Found New IPAI Utility File: {filename}")
                             ipai_bytes = gzip.decompress(part.get_payload(decode=True))
@@ -86,20 +85,24 @@ def run_recon():
         print("Required files still missing. Check if 'markup_per_utility' and 'pes' are in the email files.")
         return
 
-    df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None, names=range(35), on_bad_lines='skip', engine='python')
+    # 1. PROCESS IPAI (Collect raw tracking arrays)
+    df_ipai = pd.read_csv(io.BytesIO(ipai_raw), header=None, names=range(50), on_bad_lines='skip', engine='python')
     df_ipai = df_ipai[df_ipai[0] == 'IPAI']
     raw_date = str(df_ipai.iloc[0, 8]).split('.')[0]
     tran_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:8]}"
     
     df_ipai[14] = df_ipai[14].astype(str).str.split('.').str[0].str.slice(0, 11)
-    
-    # Extract Utility from Column T safely (Index 19)
     df_ipai[19] = df_ipai[19].astype(str).str.strip()
     
     utility_totals = (df_ipai.groupby(19)[13].sum() / 100).to_dict()
     meter_to_utility = df_ipai.set_index(14)[19].to_dict()
     
-    ipai_summary = df_ipai.groupby(14)[13].sum() / 100
+    ipai_tx = {}
+    for idx, row in df_ipai.iterrows():
+        m = str(row[14])
+        val = float(row[13]) / 100
+        if m not in ipai_tx: ipai_tx[m] = []
+        ipai_tx[m].append(val)
 
     # 2. PROCESS PES
     df_pes = pd.read_excel(io.BytesIO(pes_raw))
@@ -109,23 +112,38 @@ def run_recon():
     df_pes[amt_col] = pd.to_numeric(df_pes[amt_col], errors='coerce')
     df_pes[mtr_col] = df_pes[mtr_col].astype(str).str.split('.').str[0].str.slice(0, 11)
     df_pes = df_pes.dropna(subset=[amt_col])
-    pes_summary = df_pes.groupby(mtr_col)[amt_col].sum()
+    
+    pes_tx = {}
+    for idx, row in df_pes.iterrows():
+        m = str(row[mtr_col])
+        val = float(row[amt_col])
+        if m not in pes_tx: pes_tx[m] = []
+        pes_tx[m].append(val)
 
-    # 3. COMPARISON
-    all_meters = set(ipai_summary.index) | set(pes_summary.index)
+    # 3. INSTANCE-BASED PAIR COMPILATION
+    all_meters = set(ipai_tx.keys()) | set(pes_tx.keys())
     variances = []
-    t1, t2 = float(ipai_summary.sum()), float(pes_summary.sum())
+    t1 = sum([sum(l) for l in ipai_tx.values()])
+    t2 = sum([sum(l) for l in pes_tx.values()])
     
     for m in all_meters:
-        v1, v2 = float(ipai_summary.get(m, 0)), float(pes_summary.get(m, 0))
-        if abs(v1 - v2) > 0.01:
+        arr1 = ipai_tx.get(m, [])
+        arr2 = pes_tx.get(m, [])
+        sum1 = sum(arr1)
+        sum2 = sum(arr2)
+        
+        if abs(sum1 - sum2) > 0.01:
             u_name = meter_to_utility.get(m, "UNKNOWN")
-            variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2, 'u': u_name})
+            max_len = max(len(arr1), len(arr2))
+            for i in range(max_len):
+                v1 = arr1[i] if i < len(arr1) else 0.0
+                v2 = arr2[i] if i < len(arr2) else 0.0
+                variances.append({'m': str(m), 'v1': v1, 'v2': v2, 'diff': v1 - v2, 'u': u_name})
             try:
-                requests.post(TRACKER_URL, json={"meter_number": str(m), "amount": v1 - v2, "tranDate": tran_date, "isRobotSync": True}, timeout=3)
+                requests.post(TRACKER_URL, json={"meter_number": str(m), "amount": sum1 - sum2, "tranDate": tran_date, "isRobotSync": True}, timeout=3)
             except: pass
 
-    # 4. SAVE HISTORIC SUMMARY (91 Days Cap)
+    # 4. SAVE HISTORIC SUMMARY
     new_run = {
         "run_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
         "tran_date": tran_date, 
@@ -140,8 +158,7 @@ def run_recon():
     h_file = 'history_data.json'
     all_h = []
     if os.path.exists(h_file):
-        try:
-            with open(h_file, 'r') as f: all_h = json.load(f)
+        try: with open(h_file, 'r') as f: all_h = json.load(f)
         except: all_h = []
     
     all_h.insert(0, new_run)
