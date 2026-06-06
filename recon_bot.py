@@ -65,15 +65,15 @@ def get_attachments():
                         if not filename: continue
                         fn = filename.lower()
                         
-                        # Split base name from its extension securely (.xls, .xlsx, etc.)
+                        # Split base name from its extension securely (.xls, .xlsx)
                         base_name, ext = os.path.splitext(fn)
                         
                         if fn.endswith('.gz') and 'ipai' in fn and 'markup_per_utility' in fn:
                             print(f"✓ Found New IPAI Utility File: {filename}")
                             ipai_bytes = gzip.decompress(part.get_payload(decode=True))
-                        # STRICT MATCH CHECKING ENGINE UNLOCK
-                        elif (ext == '.xls' or ext == '.xlsx') and base_name == "ipay (smart power) pes":
-                            print(f"✓ Found Valid Locked PES File: {filename}")
+                        # DYNAMIC TIMESTAMPMED NAME LOCK VIA PREFIX MATCHING
+                        elif (ext == '.xls' or ext == '.xlsx') and base_name.startswith("7293 _pes_transactions_daily - "):
+                            print(f"✓ Found Valid Daily PES File: {filename}")
                             pes_bytes = part.get_payload(decode=True)
             
             if ipai_bytes and pes_bytes: break
@@ -86,7 +86,7 @@ def get_attachments():
 def run_recon():
     ipai_raw, pes_raw = get_attachments()
     if not ipai_raw or not pes_raw:
-        print("Required files still missing. Check if 'markup_per_utility' and 'ipay (smart power) pes' match your email uploads.")
+        print("Required files still missing. Check if 'markup_per_utility' and the daily '7293 _PES_Transactions_daily' match your email attachments.")
         return
 
     # 1. PROCESS IPAI
