@@ -65,17 +65,19 @@ def get_attachments():
                         if not filename: continue
                         fn = filename.lower()
                         
-                        # Split base name from its extension securely (.xls, .xlsx)
                         base_name, ext = os.path.splitext(fn)
                         
-                        if fn.endswith('.gz') and 'ipai' in fn and 'markup_per_utility' in fn:
-                            print(f"✓ Found New IPAI Utility File: {filename}")
+                        # 1. Lock in only the FIRST (newest latest) IPAI file found and ignore older copies
+                        if fn.endswith('.gz') and 'ipai' in fn and 'markup_per_utility' in fn and not ipai_bytes:
+                            print(f"✓ Found Latest IPAI Utility File: {filename}")
                             ipai_bytes = gzip.decompress(part.get_payload(decode=True))
-                        # DYNAMIC TIMESTAMPMED NAME LOCK VIA PREFIX MATCHING
-                        elif (ext == '.xls' or ext == '.xlsx') and base_name.startswith("7293 _pes_transactions_daily - "):
-                            print(f"✓ Found Valid Daily PES File: {filename}")
+                            
+                        # 2. Lock in only the FIRST (newest latest) PES file via flexible token check
+                        elif ext in ['.xls', '.xlsx'] and '7293' in base_name and 'pes' in base_name and 'transactions' in base_name and not pes_bytes:
+                            print(f"✓ Found Latest Daily PES File: {filename}")
                             pes_bytes = part.get_payload(decode=True)
             
+            # Stop parsing immediately once both targets are secured
             if ipai_bytes and pes_bytes: break
                 
         return ipai_bytes, pes_bytes
@@ -86,7 +88,7 @@ def get_attachments():
 def run_recon():
     ipai_raw, pes_raw = get_attachments()
     if not ipai_raw or not pes_raw:
-        print("Required files still missing. Check if 'markup_per_utility' and the daily '7293 _PES_Transactions_daily' match your email attachments.")
+        print("Required files still missing. Process execution stopped.")
         return
 
     # 1. PROCESS IPAI
