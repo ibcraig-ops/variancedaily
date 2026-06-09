@@ -1,5 +1,18 @@
 [
     {
+        "run_time": "2026-06-09 10:02:05",
+        "tran_date": "2026-06-08",
+        "ipai_total": 11818.700000000004,
+        "pes_total": 11818.700000000004,
+        "variance": 0.0,
+        "utility_totals": {
+            "garantia": 594.8,
+            "smartpowersa": 11223.9
+        },
+        "items": [],
+        "source": "ROBOT"
+    },
+    {
         "run_time": "2026-06-09 07:32:13",
         "tran_date": "2026-06-08",
         "ipai_total": 11818.700000000004,
