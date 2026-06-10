@@ -1,5 +1,34 @@
 [
     {
+        "run_time": "2026-06-10 07:22:14",
+        "tran_date": "2026-06-09",
+        "ipai_total": 20407.90000000001,
+        "pes_total": 20107.90000000001,
+        "variance": 300.0,
+        "utility_totals": {
+            "PrepayOnline": 30.0,
+            "garantia": 1745.5,
+            "smartpowersa": 18632.4
+        },
+        "items": [
+            {
+                "m": "14504242661",
+                "v1": 100.0,
+                "v2": 0.0,
+                "diff": 100.0,
+                "u": "garantia"
+            },
+            {
+                "m": "14482503696",
+                "v1": 200.0,
+                "v2": 0.0,
+                "diff": 200.0,
+                "u": "garantia"
+            }
+        ],
+        "source": "ROBOT"
+    },
+    {
         "run_time": "2026-06-09 10:02:05",
         "tran_date": "2026-06-08",
         "ipai_total": 11818.700000000004,
